@@ -1,0 +1,265 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Color Palette - eSports Gold & Charcoal */
+  --bg-primary: #0A0A0F;
+  --bg-secondary: #12121A;
+  --bg-tertiary: #1E1E2E;
+  --accent-gold: #FFD700;
+  --accent-gold-hover: #FFE57F;
+  --accent-gold-muted: rgba(255, 215, 0, 0.12);
+  --accent-gold-border: rgba(255, 215, 0, 0.3);
+  --text-primary: #ffffff;
+  --text-secondary: #a0a0ba;
+  --text-muted: #62627a;
+  --border-color: #1E1E2E;
+  --border-color-light: #2A2A3E;
+  --success: #10b981;
+  --error: #ef4444;
+  --warning: #f59e0b;
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-heading: 'Rajdhani', 'Orbitron', sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-bg-primary text-white font-sans overflow-x-hidden min-h-screen;
+    background-color: #0A0A0F;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading font-bold tracking-wide;
+  }
+}
+
+/* ==========================================================================
+   PREMIUM CUSTOM STYLES (Merged to guarantee 100% bulletproof loading)
+   ========================================================================== */
+
+/* Main layout wrapper */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 2.5rem 1.5rem;
+  max-width: 1240px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header-logo {
+  font-family: var(--font-heading);
+  font-size: 2.2rem;
+  letter-spacing: 1px;
+}
+
+/* COUNTDOWN CLOCK COMPONENT */
+.countdown-container {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 1.5rem !important;
+  padding: 1.5rem 0 !important;
+}
+
+.countdown-unit {
+  position: relative !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 90px !important;
+  height: 90px !important;
+}
+
+.countdown-svg {
+  transform: rotate(-90deg) !important;
+  width: 90px !important;
+  height: 90px !important;
+  display: block !important;
+}
+
+.countdown-circle-bg {
+  fill: transparent !important;
+  stroke: var(--border-color) !important;
+  stroke-width: 4px !important;
+}
+
+.countdown-circle-progress {
+  fill: transparent !important;
+  stroke: var(--accent-gold) !important;
+  stroke-width: 4px !important;
+  stroke-linecap: round !important;
+  transition: stroke-dashoffset 1s ease-in-out !important;
+  filter: drop-shadow(0px 0px 6px rgba(255, 215, 0, 0.6)) !important;
+}
+
+.countdown-text-overlay {
+  position: absolute !important;
+  inset: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1.1 !important;
+  text-align: center !important;
+  padding-bottom: 2px !important;
+}
+
+.countdown-number {
+  font-size: 1.45rem !important;
+  font-weight: 800 !important;
+  color: var(--text-primary) !important;
+  font-family: 'Orbitron', sans-serif !important;
+  letter-spacing: -0.5px !important;
+}
+
+.countdown-label {
+  font-size: 0.65rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  color: var(--accent-gold) !important;
+  letter-spacing: 0.1em !important;
+  margin-top: 2px !important;
+}
+
+/* TICKET SELECTOR COMPONENT */
+.ticket-selector-container {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1.5rem !important;
+  width: 100% !important;
+}
+
+.progress-bar-wrapper {
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border-color) !important;
+  padding: 1.25rem !important;
+  border-radius: 1rem !important;
+}
+
+.progress-bar-container {
+  width: 100% !important;
+  height: 12px !important;
+  border-radius: 6px !important;
+  background: var(--bg-tertiary) !important;
+  overflow: hidden !important;
+  position: relative !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.progress-bar-fill {
+  height: 100% !important;
+  border-radius: 6px !important;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.4) !important;
+}
+
+.counter-box {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 1.5rem !important;
+  margin: 1rem 0 !important;
+}
+
+.counter-btn {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background-color: var(--bg-secondary) !important;
+  border: 2px solid var(--border-color-light) !important;
+  color: var(--text-primary) !important;
+  font-size: 1.25rem !important;
+  font-weight: bold !important;
+  cursor: pointer !important;
+  transition: all var(--transition-fast) !important;
+}
+
+.counter-btn:hover:not(:disabled) {
+  border-color: var(--accent-gold) !important;
+  color: var(--accent-gold) !important;
+  transform: scale(1.05) !important;
+}
+
+.counter-btn:disabled {
+  opacity: 0.4 !important;
+  cursor: not-allowed !important;
+}
+
+.counter-value {
+  font-size: 2.2rem !important;
+  font-weight: 800 !important;
+  min-width: 60px !important;
+  text-align: center !important;
+}
+
+.total-pay-box {
+  margin-top: 1rem !important;
+  padding-top: 1rem !important;
+  border-top: 1px dashed var(--border-color-light) !important;
+  width: 100% !important;
+  text-align: center !important;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0A0A0F;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1E1E2E;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #FFD700;
+}
+
+/* Glassmorphism Card Utility */
+.glass-panel {
+  background: rgba(18, 18, 26, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+.text-gold-gradient {
+  background: linear-gradient(135deg, #FFE57F 0%, #FFD700 50%, #aa8010 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glow-gold {
+  animation: gold-pulse 2s infinite;
+}
+
+@keyframes gold-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(255, 215, 0, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 215, 0, 0);
+  }
+}
