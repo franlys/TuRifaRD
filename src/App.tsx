@@ -18,7 +18,8 @@ import {
   Lock,
   LogOut,
   ChevronLeft,
-  Video
+  Video,
+  Upload
 } from 'lucide-react';
 import { useTenant } from './context/TenantContext';
 import { CountdownClock } from './components/CountdownClock';
@@ -29,6 +30,15 @@ import { TicketVerifier } from './components/TicketVerifier';
 import { supabase } from './supabaseClient';
 import './App.css';
 
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = error => reject(error);
+  });
+};
+
 // Define Interfaces
 interface CreatorUser {
   id: string;
@@ -38,6 +48,14 @@ interface CreatorUser {
   status: 'active' | 'suspended' | 'pending_verification';
   createdRafflesCount: number;
   activationReceiptUrl?: string;
+}
+
+interface BankAccount {
+  id: string;
+  bankName: string;
+  accountHolder: string;
+  bankId: string;
+  details?: string;
 }
 
 interface Prize {
@@ -61,6 +79,7 @@ interface Raffle {
     bankId: string;
     details: string;
   };
+  paymentAccounts?: BankAccount[];
   totalTickets: number;
   status: 'active' | 'drawing' | 'finished';
   winnerTicketId?: string;
@@ -107,6 +126,10 @@ const INITIAL_RAFFLE: Raffle = {
     bankId: '402-3839670-5',
     details: 'A la hora de hacer la transferencia debes colocar tu nombre completo en el concepto de pago.'
   },
+  paymentAccounts: [
+    { id: 'b-1', bankName: 'Banco Popular Dominicano', accountHolder: 'Randy Fernández', bankId: '792-348293-1', details: 'Colocar cédula en concepto.' },
+    { id: 'b-2', bankName: 'Banco BHD', accountHolder: 'Randy Fernández', bankId: '402-3839670-5', details: 'Poner nombre completo en concepto.' }
+  ],
   totalTickets: 1000,
   status: 'active',
   prizeImage: 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=800&auto=format&fit=crop&q=60'
@@ -131,6 +154,9 @@ const CIBAO_MOCK_RAFFLE: Raffle = {
     bankId: '792-348293-1',
     details: 'Favor colocar el número de cédula en la descripción al transferir y subir comprobante legible.'
   },
+  paymentAccounts: [
+    { id: 'b-1', bankName: 'Banco Popular Dominicano', accountHolder: 'Juan Pérez', bankId: '792-348293-1', details: 'Favor colocar el número de cédula en la descripción al transferir y subir comprobante legible.' }
+  ],
   totalTickets: 500,
   status: 'active',
   prizeImage: 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=800&auto=format&fit=crop&q=60'
@@ -176,14 +202,29 @@ function App() {
   const { currentTenant, tenantSlug } = useTenant();
 
   // Navigation State (client, login, admin, live)
-  const [activeTab, setActiveTab] = useState<'client' | 'login' | 'admin' | 'live'>('client');
+  const [activeTab, setActiveTab] = useState<'client' | 'login' | 'admin' | 'live'>(() => {
+    const wasLogged = localStorage.getItem('rifas_admin_logged') === 'true';
+    return wasLogged ? 'admin' : 'client';
+  });
   
   // Auth State
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
+    return localStorage.getItem('rifas_admin_logged') === 'true';
+  });
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  const [adminRole, setAdminRole] = useState<'super_admin' | 'creator'>('super_admin');
-  const [currentCreatorId, setCurrentCreatorId] = useState<string>('c-1');
+  const [adminRole, setAdminRole] = useState<'super_admin' | 'creator'>(() => {
+    return (localStorage.getItem('rifas_admin_role') as 'super_admin' | 'creator') || 'super_admin';
+  });
+  const [currentCreatorId, setCurrentCreatorId] = useState<string>(() => {
+    return localStorage.getItem('rifas_current_creator_id') || 'c-1';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('rifas_admin_logged', String(isAdminLoggedIn));
+    localStorage.setItem('rifas_admin_role', adminRole);
+    localStorage.setItem('rifas_current_creator_id', currentCreatorId);
+  }, [isAdminLoggedIn, adminRole, currentCreatorId]);
 
   // Spectator login-less identification for Live Sorteo
   const [spectatorInput, setSpectatorInput] = useState('');
@@ -213,7 +254,8 @@ function App() {
   const [buyerName, setBuyerName] = useState('');
   const [buyerEmail, setBuyerEmail] = useState('');
   const [buyerPhone, setBuyerPhone] = useState('');
-  const [, setReceiptFile] = useState<File | null>(null);
+  const [receiptBase64, setReceiptBase64] = useState<string | null>(null);
+  const [creatorReceiptBase64, setCreatorReceiptBase64] = useState<string | null>(null);
   const [purchaseSuccess, setPurchaseSuccess] = useState(false);
   const [generatedNumbers, setGeneratedNumbers] = useState<string[]>([]);
 
@@ -238,6 +280,21 @@ function App() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  // Saved Bank Accounts for one-click selection
+  const [savedBankAccounts, setSavedBankAccounts] = useState<BankAccount[]>(() => {
+    const saved = localStorage.getItem('rifas_saved_banks');
+    return saved ? JSON.parse(saved) : [
+      { id: 'b-1', bankName: 'Banco Popular Dominicano', accountHolder: 'Randy Fernández', bankId: '792-348293-1', details: 'Colocar cédula en concepto.' },
+      { id: 'b-2', bankName: 'Banco BHD', accountHolder: 'Randy Fernández', bankId: '402-3839670-5', details: 'Poner nombre completo en concepto.' }
+    ];
+  });
+  const [selectedBankAccounts, setSelectedBankAccounts] = useState<BankAccount[]>([]);
+  const [saveBankToStorage, setSaveBankToStorage] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('rifas_saved_banks', JSON.stringify(savedBankAccounts));
+  }, [savedBankAccounts]);
 
   // Creator Registration & Recovery States
   const [loginMode, setLoginMode] = useState<'login' | 'register' | 'forgot' | 'payment'>('login');
@@ -635,7 +692,7 @@ function App() {
       buyerEmail,
       buyerPhone,
       paymentStatus: 'pending_verification' as const,
-      receiptUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=500&auto=format&fit=crop&q=60'
+      receiptUrl: receiptBase64 || 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=500&auto=format&fit=crop&q=60'
     }));
 
     setTickets(prev => [...prev, ...newRecords]);
@@ -646,7 +703,7 @@ function App() {
     setBuyerName('');
     setBuyerEmail('');
     setBuyerPhone('');
-    setReceiptFile(null);
+    setReceiptBase64(null);
     setTicketCount(1);
   };
 
@@ -680,6 +737,32 @@ function App() {
       return;
     }
 
+    const accountsList = [...selectedBankAccounts];
+
+    // If manual info was provided, parse and optionally save it
+    if (newBankName.trim() && newBankId.trim()) {
+      const manualAccount: BankAccount = {
+        id: `bank-${Date.now()}`,
+        bankName: newBankName.trim(),
+        accountHolder: newBankHolder.trim() || 'Titular no especificado',
+        bankId: newBankId.trim(),
+        details: newBankDetails.trim()
+      };
+
+      accountsList.push(manualAccount);
+
+      if (saveBankToStorage) {
+        setSavedBankAccounts(prev => [...prev, manualAccount]);
+      }
+    }
+
+    if (accountsList.length === 0) {
+      alert('Debe agregar o seleccionar al menos una cuenta de banco.');
+      return;
+    }
+
+    const firstAccount = accountsList[0];
+
     const newRaffle: Raffle = {
       id: `raffle-${Date.now()}`,
       tenantId: tenantSlug,
@@ -691,11 +774,12 @@ function App() {
       creatorId: adminRole === 'super_admin' ? 'super_admin' : currentCreatorId,
       prizes: filteredPrizes.map((p, idx) => ({ id: `prize-${idx}-${Date.now()}`, name: p })),
       paymentInfo: {
-        bankName: newBankName,
-        accountHolder: newBankHolder,
-        bankId: newBankId,
-        details: newBankDetails
+        bankName: firstAccount.bankName,
+        accountHolder: firstAccount.accountHolder,
+        bankId: firstAccount.bankId,
+        details: firstAccount.details || ''
       },
+      paymentAccounts: accountsList,
       totalTickets: newTotalTickets || 1000,
       status: 'active',
       prizeImage: newPrizeImage.trim() || 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=800&auto=format&fit=crop&q=60'
@@ -715,7 +799,7 @@ function App() {
       }));
     }
 
-    // Clear Form
+    // Clear Form & selected states
     setNewTitle('');
     setNewDesc('');
     setNewDrawDate('');
@@ -727,6 +811,8 @@ function App() {
     setNewBankHolder('');
     setNewBankId('');
     setNewBankDetails('');
+    setSelectedBankAccounts([]);
+    setSaveBankToStorage(false);
   };
 
   // Confirm/Verify Payment
@@ -1083,23 +1169,55 @@ function App() {
                         <h3 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2 font-heading">
                           <CreditCard size={18} style={{ color: 'var(--accent-gold)' }} /> MODOS DE PAGO Y DETALLES
                         </h3>
-                        <div className="flex flex-col gap-2">
-                          <div className="p-3.5 rounded-xl bg-bg-secondary border border-bg-tertiary text-sm">
-                            <span className="text-xs text-text-muted block">Banco/Canal</span>
-                            <strong className="text-white text-base block">{activeRaffle.paymentInfo.bankName}</strong>
-                          </div>
-                          <div className="p-3.5 rounded-xl bg-bg-secondary border border-bg-tertiary text-sm">
-                            <span className="text-xs text-text-muted block">Titular de la cuenta</span>
-                            <strong className="text-white text-base block">{activeRaffle.paymentInfo.accountHolder}</strong>
-                          </div>
-                          <div className="p-3.5 rounded-xl bg-bg-secondary border border-bg-tertiary text-sm">
-                            <span className="text-xs text-text-muted block">Número de cuenta / Cédula / RNC</span>
-                            <strong className="text-white text-lg font-bold block text-gold-gradient font-orbitron">{activeRaffle.paymentInfo.bankId}</strong>
-                          </div>
+                        <div className="flex flex-col gap-4">
+                          {activeRaffle.paymentAccounts && activeRaffle.paymentAccounts.length > 0 ? (
+                            activeRaffle.paymentAccounts.map((acc, index) => (
+                              <div key={acc.id || index} className="p-4 rounded-xl bg-bg-secondary border border-bg-tertiary text-sm flex flex-col gap-2 relative overflow-hidden group hover:border-accent-gold-border transition-all duration-300">
+                                <div className="flex justify-between items-center border-b border-bg-tertiary pb-1 mb-1">
+                                  <span className="text-[10px] text-accent-gold font-bold uppercase tracking-wider font-rajdhani">Cuenta de Pago #{index + 1}</span>
+                                  <span className="text-[10px] text-text-muted font-sans font-bold">{acc.bankName}</span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-0.5">
+                                  <div>
+                                    <span className="text-[9px] text-text-muted block">Banco/Canal</span>
+                                    <strong className="text-white text-xs block truncate">{acc.bankName}</strong>
+                                  </div>
+                                  <div>
+                                    <span className="text-[9px] text-text-muted block">Titular</span>
+                                    <strong className="text-white text-xs block truncate">{acc.accountHolder}</strong>
+                                  </div>
+                                </div>
+                                <div className="mt-1">
+                                  <span className="text-[9px] text-text-muted block">Número de cuenta / Cédula / RNC</span>
+                                  <strong className="text-white text-base font-bold block text-gold-gradient font-orbitron">{acc.bankId}</strong>
+                                </div>
+                                {acc.details && (
+                                  <p className="text-[10px] text-text-muted italic leading-relaxed border-t border-bg-tertiary pt-2 mt-1">
+                                    💡 {acc.details}
+                                  </p>
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="flex flex-col gap-2">
+                              <div className="p-3.5 rounded-xl bg-bg-secondary border border-bg-tertiary text-sm">
+                                <span className="text-xs text-text-muted block">Banco/Canal</span>
+                                <strong className="text-white text-base block">{activeRaffle.paymentInfo.bankName}</strong>
+                              </div>
+                              <div className="p-3.5 rounded-xl bg-bg-secondary border border-bg-tertiary text-sm">
+                                <span className="text-xs text-text-muted block">Titular de la cuenta</span>
+                                <strong className="text-white text-base block">{activeRaffle.paymentInfo.accountHolder}</strong>
+                              </div>
+                              <div className="p-3.5 rounded-xl bg-bg-secondary border border-bg-tertiary text-sm">
+                                <span className="text-xs text-text-muted block">Número de cuenta / Cédula / RNC</span>
+                                <strong className="text-white text-lg font-bold block text-gold-gradient font-orbitron">{activeRaffle.paymentInfo.bankId}</strong>
+                              </div>
+                              <p className="text-xs text-text-muted italic leading-relaxed border-t border-bg-tertiary pt-3">
+                                💡 {activeRaffle.paymentInfo.details}
+                              </p>
+                            </div>
+                          )}
                         </div>
-                        <p className="text-xs text-text-muted italic leading-relaxed border-t border-bg-tertiary pt-3">
-                          💡 {activeRaffle.paymentInfo.details}
-                        </p>
                       </div>
                     </div>
 
@@ -1181,7 +1299,18 @@ function App() {
 
                           {/* Deposit Uploader */}
                           <DepositUploader 
-                            onFileSelect={(file) => setReceiptFile(file)}
+                            onFileSelect={async (file) => {
+                              if (file) {
+                                try {
+                                  const base64 = await fileToBase64(file);
+                                  setReceiptBase64(base64);
+                                } catch (err) {
+                                  console.error(err);
+                                }
+                              } else {
+                                setReceiptBase64(null);
+                              }
+                            }}
                             onSubmit={() => {
                               if (!buyerName || !buyerEmail || !buyerPhone) {
                                 alert('Por favor completa todos tus datos personales.');
@@ -1444,11 +1573,25 @@ function App() {
                       Comprobante de Pago *
                     </label>
                     <DepositUploader 
-                      onFileSelect={() => {}}
+                      onFileSelect={async (file) => {
+                        if (file) {
+                          try {
+                            const base64 = await fileToBase64(file);
+                            setCreatorReceiptBase64(base64);
+                          } catch (err) {
+                            console.error(err);
+                          }
+                        } else {
+                          setCreatorReceiptBase64(null);
+                        }
+                      }}
                       onSubmit={() => {
-                        // Simulación rápida de URL de comprobante
-                        const mockUrl = 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=500';
-                        handleCreatorPaymentSubmit(mockUrl);
+                        if (creatorReceiptBase64) {
+                          handleCreatorPaymentSubmit(creatorReceiptBase64);
+                          setCreatorReceiptBase64(null);
+                        } else {
+                          alert('Por favor, selecciona o sube tu comprobante de pago.');
+                        }
                       }}
                     />
                   </div>
@@ -2300,14 +2443,56 @@ function App() {
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">Imagen del Premio Principal (URL)</label>
-                  <input 
-                    type="text" 
-                    value={newPrizeImage}
-                    onChange={(e) => setNewPrizeImage(e.target.value)}
-                    placeholder="ej. https://images.unsplash.com/... o vacío para usar predeterminada"
-                    className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
-                  />
+                  <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">Imagen del Premio Principal</label>
+                  {newPrizeImage.startsWith('data:image/') ? (
+                    <div className="relative border border-bg-tertiary rounded-xl p-2.5 bg-bg-secondary flex items-center gap-3">
+                      <img src={newPrizeImage} alt="Premio" className="w-12 h-12 object-cover rounded-lg border border-bg-tertiary" />
+                      <div className="flex-grow min-w-0">
+                        <span className="text-[11px] text-emerald-400 font-semibold block">Imagen cargada localmente</span>
+                        <span className="text-[9px] text-text-muted block truncate">Lista para guardarse en la rifa</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setNewPrizeImage('')}
+                        className="p-2 rounded-lg border border-red-500/20 text-red-500 hover:bg-red-950/20"
+                        title="Remover imagen"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <input 
+                        type="text" 
+                        value={newPrizeImage}
+                        onChange={(e) => setNewPrizeImage(e.target.value)}
+                        placeholder="ej. https://images.unsplash.com/... o vacío para predeterminada"
+                        className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                      />
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] text-text-muted">O selecciona una de tu dispositivo:</span>
+                        <label className="text-[10px] font-bold text-accent-gold hover:underline cursor-pointer flex items-center gap-1 font-heading border border-accent-gold/20 py-1 px-2 rounded-lg bg-accent-gold-muted/10 hover:bg-accent-gold-muted/20 transition-all">
+                          <Upload size={10} /> Cargar Archivo
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                try {
+                                  const base64 = await fileToBase64(file);
+                                  setNewPrizeImage(base64);
+                                } catch (err) {
+                                  console.error(err);
+                                }
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2355,49 +2540,126 @@ function App() {
               <div className="border-t border-bg-tertiary pt-4 mt-2 flex flex-col gap-4">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-accent-gold font-heading">Detalles de Cobro Bancario</h4>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Saved Bank Accounts List */}
+                {savedBankAccounts.length > 0 && (
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">Nombre del Banco</label>
-                    <input 
-                      type="text" 
-                      value={newBankName}
-                      onChange={(e) => setNewBankName(e.target.value)}
-                      placeholder="ej. Banco BHD"
-                      className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
-                    />
+                    <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">
+                      Cuentas Guardadas (Selecciona una o más):
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
+                      {savedBankAccounts.map((bank) => {
+                        const isSelected = selectedBankAccounts.some(b => b.id === bank.id);
+                        return (
+                          <div
+                            key={bank.id}
+                            onClick={() => {
+                              if (isSelected) {
+                                setSelectedBankAccounts(prev => prev.filter(b => b.id !== bank.id));
+                              } else {
+                                setSelectedBankAccounts(prev => [...prev, bank]);
+                              }
+                            }}
+                            className={`p-3 rounded-xl border bg-bg-secondary cursor-pointer transition-all flex flex-col gap-1 relative group hover:border-accent-gold/50 ${
+                              isSelected ? 'border-accent-gold/80 shadow-lg shadow-accent-gold/5' : 'border-bg-tertiary'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start pr-6">
+                              <span className="text-xs font-bold text-white font-rajdhani truncate">{bank.bankName}</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSavedBankAccounts(prev => prev.filter(b => b.id !== bank.id));
+                                  setSelectedBankAccounts(prev => prev.filter(b => b.id !== bank.id));
+                                }}
+                                className="text-text-muted hover:text-red-500 p-0.5 rounded transition-colors absolute top-2.5 right-2"
+                                title="Eliminar cuenta guardada"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                            <span className="text-[10px] text-text-secondary truncate">Titular: {bank.accountHolder}</span>
+                            <span className="text-[10px] text-text-muted font-mono">{bank.bankId}</span>
+                            {bank.details && <span className="text-[9px] text-text-muted italic truncate">💡 {bank.details}</span>}
+                            <div className="absolute bottom-2.5 right-2 flex items-center justify-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                readOnly
+                                className="w-3.5 h-3.5 accent-accent-gold rounded border-bg-tertiary pointer-events-none"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">Titular de la Cuenta</label>
-                    <input 
-                      type="text" 
-                      value={newBankHolder}
-                      onChange={(e) => setNewBankHolder(e.target.value)}
-                      placeholder="ej. Randy Fernández"
-                      className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
-                    />
+                )}
+
+                {/* Manual entry block */}
+                <div className="border border-bg-tertiary/60 p-4 rounded-xl flex flex-col gap-3">
+                  <span className="text-xs font-bold uppercase tracking-wider text-text-secondary font-rajdhani">
+                    {savedBankAccounts.length > 0 ? '+ Agregar otra cuenta a esta rifa' : 'Agregar datos de cuenta bancaria'}
+                  </span>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-semibold uppercase tracking-wider text-text-muted font-rajdhani">Nombre del Banco</label>
+                      <input 
+                        type="text" 
+                        value={newBankName}
+                        onChange={(e) => setNewBankName(e.target.value)}
+                        placeholder="ej. Banco Popular"
+                        className="w-full py-2 px-3 rounded-lg border bg-bg-primary text-white text-xs border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-semibold uppercase tracking-wider text-text-muted font-rajdhani">Titular de la Cuenta</label>
+                      <input 
+                        type="text" 
+                        value={newBankHolder}
+                        onChange={(e) => setNewBankHolder(e.target.value)}
+                        placeholder="ej. Randy Fernández"
+                        className="w-full py-2 px-3 rounded-lg border bg-bg-primary text-white text-xs border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                      />
+                    </div>
                   </div>
-                </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-semibold uppercase tracking-wider text-text-muted font-rajdhani">Número de Cuenta / Cédula</label>
+                      <input 
+                        type="text" 
+                        value={newBankId}
+                        onChange={(e) => setNewBankId(e.target.value)}
+                        placeholder="ej. 7923482931"
+                        className="w-full py-2 px-3 rounded-lg border bg-bg-primary text-white text-xs border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-semibold uppercase tracking-wider text-text-muted font-rajdhani">Instrucciones Adicionales</label>
+                      <input 
+                        type="text" 
+                        value={newBankDetails}
+                        onChange={(e) => setNewBankDetails(e.target.value)}
+                        placeholder="ej. Colocar cédula en concepto"
+                        className="w-full py-2 px-3 rounded-lg border bg-bg-primary text-white text-xs border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                      />
+                    </div>
+                  </div>
 
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">Número de Cuenta / Cédula</label>
-                  <input 
-                    type="text" 
-                    value={newBankId}
-                    onChange={(e) => setNewBankId(e.target.value)}
-                    placeholder="ej. 40238396705"
-                    className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">Instrucciones Adicionales</label>
-                  <input 
-                    type="text" 
-                    value={newBankDetails}
-                    onChange={(e) => setNewBankDetails(e.target.value)}
-                    placeholder="ej. Poner nombre en la descripción al transferir"
-                    className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
-                  />
+                  <div className="flex items-center gap-2 mt-1">
+                    <input
+                      type="checkbox"
+                      id="saveBankToStorage"
+                      checked={saveBankToStorage}
+                      onChange={(e) => setSaveBankToStorage(e.target.checked)}
+                      className="w-4 h-4 accent-accent-gold rounded border-bg-tertiary cursor-pointer"
+                    />
+                    <label htmlFor="saveBankToStorage" className="text-xs text-text-secondary cursor-pointer select-none">
+                      Guardar esta cuenta para usarla con un clic en futuras rifas
+                    </label>
+                  </div>
                 </div>
               </div>
 
