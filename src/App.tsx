@@ -26,6 +26,7 @@ import { LiveWheel } from './components/LiveWheel';
 import { TicketSelector } from './components/TicketSelector';
 import { DepositUploader } from './components/DepositUploader';
 import { TicketVerifier } from './components/TicketVerifier';
+import { supabase } from './supabaseClient';
 import './App.css';
 
 // Define Interfaces
@@ -309,11 +310,60 @@ function App() {
     : (visibleRaffles.find(r => r.id === selectedRaffleId) || visibleRaffles[0] || null);
 
   // Handle Login Validation
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const email = loginEmail.trim().toLowerCase();
     const password = loginPassword.trim();
 
+    // 1. Intentar iniciar sesión usando Supabase Auth si está configurado
+    const isSupabaseConfigured = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+
+        if (!error && data?.user) {
+          const envAdminEmail = import.meta.env.VITE_ADMIN_EMAIL || 'admin@rifas.com';
+          const isSuperAdmin = email === envAdminEmail.toLowerCase();
+          
+          if (isSuperAdmin) {
+            setAdminRole('super_admin');
+          } else {
+            // Verificar si el usuario registrado existe en la tabla de creadores
+            const { data: creatorData } = await supabase
+              .from('creators')
+              .select('id')
+              .eq('email', email)
+              .single();
+
+            if (creatorData) {
+              setAdminRole('creator');
+              setCurrentCreatorId(creatorData.id);
+            } else {
+              setAdminRole('creator');
+              setCurrentCreatorId(data.user.id);
+            }
+          }
+
+          setIsAdminLoggedIn(true);
+          setActiveTab('admin');
+          setLoginEmail('');
+          setLoginPassword('');
+          return;
+        } else if (error) {
+          // Si Supabase devuelve error de credenciales, mostramos alerta directamente
+          alert(`Error de autenticación: ${error.message}`);
+          return;
+        }
+      } catch (err) {
+        console.error("Error conectando a Supabase Auth:", err);
+      }
+    }
+
+    // 2. Fallback de credenciales locales si Supabase no está configurado
     const envAdminEmail = import.meta.env.VITE_ADMIN_EMAIL || 'admin@rifas.com';
     const envAdminPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
     const envCreatorPassword = import.meta.env.VITE_CREATOR_PASSWORD || 'creador123';
