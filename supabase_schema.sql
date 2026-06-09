@@ -102,7 +102,8 @@ CREATE POLICY "Permitir insercion publica de tickets" ON tickets FOR INSERT WITH
 
 -- Insertar Tenants
 INSERT INTO tenants (id, slug, company_name, primary_color, secondary_color, bg_color, card_bg, border_bg) VALUES
-('11111111-1111-1111-1111-111111111111', 'banshee', 'Banshees RD', '#FFD700', '#FFE57F', '#0A0A0F', '#12121A', '#1E1E2E'),
+('00000000-0000-0000-0000-000000000000', 'turifard', 'Tu Rifa RD', '#FFD700', '#FFE57F', '#0A0A0F', '#12121A', '#1E1E2E'),
+('11111111-1111-1111-1111-111111111111', 'banshee', 'Banshees RD', '#FF9F0A', '#FFD60A', '#0B0A0F', '#14121A', '#221E2F'),
 ('22222222-2222-2222-2222-222222222222', 'cibao', 'Sorteos del Cibao', '#00F5FF', '#80FBFF', '#080F1A', '#0F1A2B', '#1E2F47')
 ON CONFLICT (slug) DO NOTHING;
 

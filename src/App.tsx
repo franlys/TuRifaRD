@@ -256,17 +256,17 @@ function App() {
   // Sync selectedRaffleId and view mode automatically on brand/tenant swap
   useEffect(() => {
     setClientViewMode('catalog');
-    const tenantRaffles = raffles.filter(r => r.tenantId === tenantSlug);
-    if (tenantRaffles.length > 0) {
-      const hasActive = tenantRaffles.find(r => r.id === selectedRaffleId);
+    const tr = tenantSlug === 'turifard' ? raffles : raffles.filter(r => r.tenantId === tenantSlug);
+    if (tr.length > 0) {
+      const hasActive = tr.find(r => r.id === selectedRaffleId);
       if (!hasActive) {
-        setSelectedRaffleId(tenantRaffles[0].id);
+        setSelectedRaffleId(tr[0].id);
       }
     }
   }, [tenantSlug]);
 
   // Filter dynamic arrays by current active Tenant/Brand
-  const tenantRaffles = raffles.filter(r => r.tenantId === tenantSlug);
+  const tenantRaffles = tenantSlug === 'turifard' ? raffles : raffles.filter(r => r.tenantId === tenantSlug);
   const activeRaffle = tenantRaffles.find(r => r.id === selectedRaffleId) || tenantRaffles[0] || raffles[0];
 
   const visibleRaffles = !isAdminLoggedIn 

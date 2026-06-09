@@ -17,15 +17,25 @@ interface TenantContextType {
 }
 
 const DEFAULT_TENANTS: Record<string, TenantConfig> = {
-  banshee: {
-    id: 't-banshee',
-    slug: 'banshee',
-    companyName: 'Banshees RD',
+  turifard: {
+    id: 't-turifard',
+    slug: 'turifard',
+    companyName: 'Tu Rifa RD',
     primaryColor: '#FFD700', // Gold
     secondaryColor: '#FFE57F',
     bgColor: '#0A0A0F',
     cardBg: '#12121A',
     borderBg: '#1E1E2E'
+  },
+  banshee: {
+    id: 't-banshee',
+    slug: 'banshee',
+    companyName: 'Banshees RD',
+    primaryColor: '#FF9F0A', // Orange Neon
+    secondaryColor: '#FFD60A',
+    bgColor: '#0B0A0F',
+    cardBg: '#14121A',
+    borderBg: '#221E2F'
   },
   cibao: {
     id: 't-cibao',
@@ -42,7 +52,7 @@ const DEFAULT_TENANTS: Record<string, TenantConfig> = {
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
 export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [tenantSlug, setTenantSlug] = useState('banshee');
+  const [tenantSlug, setTenantSlug] = useState('turifard');
 
   useEffect(() => {
     // Detect tenant slug from URL search param '?brand='
@@ -60,7 +70,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, []);
 
-  const currentTenant = DEFAULT_TENANTS[tenantSlug] || DEFAULT_TENANTS.banshee;
+  const currentTenant = DEFAULT_TENANTS[tenantSlug] || DEFAULT_TENANTS.turifard;
 
   // Invalidate standard document colors and inject brand custom CSS variables dynamically!
   useEffect(() => {
