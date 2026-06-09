@@ -45,8 +45,25 @@ El proyecto está preparado para conectarse a **Supabase** y desplegarse en **Ve
 3. En la sección **Environment Variables** durante la creación del proyecto (o en settings), agrega las siguientes variables:
    - `VITE_SUPABASE_URL` = (Tu URL de Supabase)
    - `VITE_SUPABASE_ANON_KEY` = (Tu API Key anon de Supabase)
+   - `VITE_ADMIN_EMAIL` = (Tu correo personalizado para administrador)
+   - `VITE_ADMIN_PASSWORD` = (Tu contraseña personalizada para administrador)
 4. Vercel detectará la configuración de Vite automáticamente. Haz clic en **Deploy**.
 5. Las rutas secundarias y subdominios están controlados en Vercel gracias al archivo [`vercel.json`](file:///c:/Users/elmae/rifas/vercel.json) configurado en la raíz.
+
+---
+
+### 🔑 Cambio de Credenciales de Administrador (Seguridad)
+
+Por defecto, el sistema viene con las siguientes credenciales de prueba:
+* **Email**: `admin@rifas.com`
+* **Contraseña**: `admin123`
+
+Para cambiar estas credenciales por las tuyas propias y deshabilitar las por defecto, simplemente agrega estas variables de entorno en **Vercel** o en tu archivo **`.env` local**:
+* `VITE_ADMIN_EMAIL` = `tu-correo@ejemplo.com`
+* `VITE_ADMIN_PASSWORD` = `TuContraseñaSegura123`
+* `VITE_CREATOR_PASSWORD` = `ContraseñaParaCreadoresSecundarios`
+
+El sistema cargará automáticamente tus variables de entorno y bloqueará las credenciales de prueba anteriores.
 
 ---
 

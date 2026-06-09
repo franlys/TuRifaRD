@@ -314,7 +314,11 @@ function App() {
     const email = loginEmail.trim().toLowerCase();
     const password = loginPassword.trim();
 
-    if (email === 'admin@rifas.com' && password === 'admin123') {
+    const envAdminEmail = import.meta.env.VITE_ADMIN_EMAIL || 'admin@rifas.com';
+    const envAdminPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
+    const envCreatorPassword = import.meta.env.VITE_CREATOR_PASSWORD || 'creador123';
+
+    if (email === envAdminEmail.toLowerCase() && password === envAdminPassword) {
       setAdminRole('super_admin');
       setIsAdminLoggedIn(true);
       setActiveTab('admin');
@@ -323,7 +327,7 @@ function App() {
     } else {
       // Check if matches creators
       const creator = creators.find(c => c.email.toLowerCase() === email);
-      if (creator && password === 'creador123') {
+      if (creator && password === envCreatorPassword) {
         setAdminRole('creator');
         setCurrentCreatorId(creator.id);
         setIsAdminLoggedIn(true);
