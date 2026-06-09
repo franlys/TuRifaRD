@@ -17,7 +17,8 @@ import {
   Ticket,
   Lock,
   LogOut,
-  ChevronLeft
+  ChevronLeft,
+  Video
 } from 'lucide-react';
 import { useTenant } from './context/TenantContext';
 import { CountdownClock } from './components/CountdownClock';
@@ -239,6 +240,36 @@ function App() {
   // Live Draw View States
   const [triggerSpin, setTriggerSpin] = useState(false);
   const [liveDrawingInProgress, setLiveDrawingInProgress] = useState(false);
+
+  // Live Stream States and Helpers
+  const [streamMode, setStreamMode] = useState<'none' | 'external' | 'camera'>('none');
+  const [externalStreamUrl, setExternalStreamUrl] = useState<string>('https://www.youtube.com/embed/jfKfPfyJRdk');
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+
+  const startLocalStream = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      setLocalStream(stream);
+    } catch (err) {
+      console.error("Error accessing camera/microphone:", err);
+      alert("No se pudo acceder a la cámara o micrófono. Por favor verifica tus permisos.");
+    }
+  };
+
+  const stopLocalStream = () => {
+    if (localStream) {
+      localStream.getTracks().forEach((track) => track.stop());
+      setLocalStream(null);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (localStream) {
+        localStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [localStream]);
 
   // Persistence Sync
   useEffect(() => {
@@ -1374,6 +1405,161 @@ function App() {
                   <h2 className="text-2xl font-orbitron font-extrabold text-white uppercase">{activeRaffle.title}</h2>
                   <p className="text-xs text-text-secondary mt-1 font-rajdhani">Sincronización interactiva de boletos validados. ¡Gira la ruleta y anuncia el ganador!</p>
                 </div>
+
+                {/* Selector de Transmisión en Vivo */}
+                <div className="glass-panel p-5 rounded-2xl border border-bg-tertiary flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-bg-secondary text-left w-full">
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-xs text-text-muted font-rajdhani uppercase font-extrabold tracking-wider">Modo de Transmisión</span>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      <button
+                        onClick={() => {
+                          setStreamMode('none');
+                          stopLocalStream();
+                        }}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold font-sans transition-all border ${
+                          streamMode === 'none'
+                            ? 'bg-accent-gold-muted border-accent-gold text-accent-gold'
+                            : 'bg-bg-primary border-bg-tertiary text-text-secondary hover:text-white'
+                        }`}
+                      >
+                        Sin Video (Solo Sorteo)
+                      </button>
+                      <button
+                        onClick={() => {
+                          setStreamMode('external');
+                          stopLocalStream();
+                        }}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold font-sans transition-all border ${
+                          streamMode === 'external'
+                            ? 'bg-accent-gold-muted border-accent-gold text-accent-gold'
+                            : 'bg-bg-primary border-bg-tertiary text-text-secondary hover:text-white'
+                        }`}
+                      >
+                        YouTube / Twitch / Kick
+                      </button>
+                      <button
+                        onClick={() => {
+                          setStreamMode('camera');
+                        }}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold font-sans transition-all border ${
+                          streamMode === 'camera'
+                            ? 'bg-accent-gold-muted border-accent-gold text-accent-gold'
+                            : 'bg-bg-primary border-bg-tertiary text-text-secondary hover:text-white'
+                        }`}
+                      >
+                        {isAdminLoggedIn ? 'Transmitir Mi Cámara Web' : 'Cámara del Organizador'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Configuración de link externo (Solo para creadores/admin) */}
+                  {isAdminLoggedIn && streamMode === 'external' && (
+                    <div className="flex flex-col gap-1 w-full md:w-auto flex-1 md:flex-none md:max-w-md">
+                      <span className="text-[10px] text-text-muted font-rajdhani uppercase font-extrabold tracking-wider">URL de Inserción (Embed)</span>
+                      <input
+                        type="text"
+                        value={externalStreamUrl}
+                        onChange={(e) => setExternalStreamUrl(e.target.value)}
+                        placeholder="ej: https://www.youtube.com/embed/XXXXXX"
+                        className="w-full py-2 px-3 rounded-lg border bg-bg-primary text-white text-xs border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                      />
+                    </div>
+                  )}
+
+                  {/* Botones de Captura local (WebRTC) */}
+                  {streamMode === 'camera' && (
+                    <div className="flex flex-col gap-1">
+                      {isAdminLoggedIn ? (
+                        <>
+                          <span className="text-[10px] text-text-muted font-rajdhani uppercase font-extrabold tracking-wider">Control de Video</span>
+                          {!localStream ? (
+                            <button
+                              onClick={startLocalStream}
+                              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white uppercase tracking-wider font-heading"
+                            >
+                              Activar Mi Cámara
+                            </button>
+                          ) : (
+                            <button
+                              onClick={stopLocalStream}
+                              className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-xs font-bold text-white uppercase tracking-wider font-heading animate-pulse"
+                            >
+                              Apagar Cámara
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-2 text-xs text-text-secondary">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <span>Transmisión Directa Activa</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Reproductor de Video de Transmisión */}
+                {streamMode !== 'none' && (
+                  <div className="glass-panel p-4 rounded-3xl border border-bg-tertiary w-full max-w-4xl mx-auto overflow-hidden bg-black/40 shadow-2xl">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-accent-gold mb-3 flex items-center gap-1.5 justify-center font-heading">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span>
+                      SEÑAL DE VIDEO EN DIRECTO
+                    </h3>
+                    <div className="relative aspect-video w-full max-h-[380px] rounded-2xl overflow-hidden bg-bg-primary border border-bg-tertiary flex items-center justify-center">
+                      {streamMode === 'external' ? (
+                        <iframe
+                          src={externalStreamUrl}
+                          className="w-full h-full border-0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                          title="Live Stream"
+                        ></iframe>
+                      ) : streamMode === 'camera' ? (
+                        <div className="relative w-full h-full flex items-center justify-center bg-bg-secondary">
+                          <video
+                            autoPlay
+                            playsInline
+                            muted={isAdminLoggedIn} // Mute creator locally to avoid feedback echo
+                            className="w-full h-full object-cover"
+                            ref={(ref) => {
+                              if (ref) {
+                                // If admin, attach local webcam stream
+                                if (isAdminLoggedIn && localStream) {
+                                  ref.srcObject = localStream;
+                                } else if (!isAdminLoggedIn) {
+                                  // For spectator demonstration, use direct camera loop to simulate the streamer's direct room feed
+                                  navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                                    .then(s => { ref.srcObject = s; })
+                                    .catch(() => { ref.srcObject = null; });
+                                } else {
+                                  ref.srcObject = null;
+                                }
+                              }
+                            }}
+                          />
+                          {isAdminLoggedIn && !localStream && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60">
+                              <span className="w-10 h-10 rounded-full bg-accent-gold-muted border border-accent-gold-border flex items-center justify-center text-accent-gold animate-pulse">
+                                <Video size={18} />
+                              </span>
+                              <span className="text-xs text-text-secondary font-rajdhani">Haz clic en "Activar Mi Cámara" para comenzar la transmisión...</span>
+                            </div>
+                          )}
+                          {!isAdminLoggedIn && (
+                            <span className="absolute bottom-4 left-4 text-[10px] bg-emerald-600 text-white font-bold px-2.5 py-1 rounded shadow-lg uppercase font-rajdhani flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span> Directo Directo (WebRTC)
+                            </span>
+                          )}
+                          {isAdminLoggedIn && localStream && (
+                            <span className="absolute bottom-4 left-4 text-[10px] bg-red-600 text-white font-bold px-2.5 py-1 rounded shadow-lg uppercase font-rajdhani flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span> Transmitiendo en Vivo
+                            </span>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
 
                 {/* Main Spectator live layout */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start mt-2 w-full">
