@@ -16,7 +16,8 @@ import {
   Shield,
   Ticket,
   Lock,
-  LogOut
+  LogOut,
+  ChevronLeft
 } from 'lucide-react';
 import { useTenant } from './context/TenantContext';
 import { CountdownClock } from './components/CountdownClock';
@@ -204,6 +205,7 @@ function App() {
 
   // Client View States
   const [selectedRaffleId, setSelectedRaffleId] = useState<string>('raffle-1');
+  const [clientViewMode, setClientViewMode] = useState<'catalog' | 'detail'>('catalog');
   const [ticketCount, setTicketCount] = useState(1);
   const [buyerName, setBuyerName] = useState('');
   const [buyerEmail, setBuyerEmail] = useState('');
@@ -251,8 +253,9 @@ function App() {
     localStorage.setItem('rifas_tickets', JSON.stringify(tickets));
   }, [tickets]);
 
-  // Sync selectedRaffleId automatically on brand/tenant swap
+  // Sync selectedRaffleId and view mode automatically on brand/tenant swap
   useEffect(() => {
+    setClientViewMode('catalog');
     const tenantRaffles = raffles.filter(r => r.tenantId === tenantSlug);
     if (tenantRaffles.length > 0) {
       const hasActive = tenantRaffles.find(r => r.id === selectedRaffleId);
@@ -260,7 +263,7 @@ function App() {
         setSelectedRaffleId(tenantRaffles[0].id);
       }
     }
-  }, [tenantSlug, raffles, selectedRaffleId]);
+  }, [tenantSlug]);
 
   // Filter dynamic arrays by current active Tenant/Brand
   const tenantRaffles = raffles.filter(r => r.tenantId === tenantSlug);
@@ -575,210 +578,358 @@ function App() {
         {/* ==================== PORTAL DEL CLIENTE ==================== */}
         {activeTab === 'client' && (
           <div className="flex flex-col gap-8">
-            {/* Raffle Details Header */}
-            <div className="glass-panel p-8 rounded-3xl relative overflow-hidden border border-bg-tertiary">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
-                {/* Left Column: Raffle Text Info */}
-                <div className="md:col-span-7 text-left flex flex-col items-start justify-center">
-                  <span className="text-xs uppercase font-extrabold tracking-widest text-accent-gold px-3 py-1 rounded-full bg-accent-gold-muted border border-accent-gold-border mb-4 font-rajdhani">
-                    Sorteo Oficial
-                  </span>
-                  <h2 className="text-3xl md:text-4xl font-orbitron font-extrabold text-white mb-2">{activeRaffle.title}</h2>
-                  <p className="text-sm text-text-secondary leading-relaxed mb-6">{activeRaffle.description}</p>
-                  
-                  {/* Prizes List */}
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2 font-rajdhani">Premios en Juego</h4>
-                  <div className="flex flex-wrap items-center gap-3 w-full">
-                    {activeRaffle.prizes.map((p, idx) => (
-                      <span key={p.id} className="text-xs font-semibold px-4 py-2 rounded-lg bg-bg-secondary border border-border-color-light flex items-center gap-1.5 font-sans">
-                        <Trophy size={13} style={{ color: 'var(--accent-gold)' }} />
-                        {idx === 0 ? '🏆 1er Premio: ' : `${idx + 1}º Premio: `} {p.name}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* Show Winner block if raffle is finished */}
-                  {activeRaffle.status === 'finished' && (
-                    <div className="mt-6 p-6 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 max-w-md w-full glow-gold">
-                      <h4 className="text-xs uppercase font-extrabold text-emerald-400 tracking-wider font-rajdhani">🎉 Sorteo Finalizado (Boleto Ganador)</h4>
-                      <h3 className="text-4xl font-black text-white mt-2 font-orbitron">#{tickets.find(t => t.id === activeRaffle.winnerTicketId)?.ticketNumber}</h3>
-                      <p className="text-sm font-semibold text-white mt-1">{activeRaffle.winnerName}</p>
-                      <p className="text-[10px] text-emerald-500 mt-2 font-rajdhani">Este sorteo se cerrará permanentemente en 15 días.</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Right Column: Beautiful Prize Image */}
-                <div className="md:col-span-5 flex flex-col items-center justify-center">
-                  <div className="relative w-full max-w-[340px] aspect-[4/3] rounded-2xl overflow-hidden border border-bg-tertiary shadow-xl glow-gold group">
+            {clientViewMode === 'catalog' ? (
+              <div className="flex flex-col gap-8">
+                {/* Hero Catalog Banner */}
+                <div className="glass-panel p-8 rounded-3xl relative overflow-hidden border border-bg-tertiary text-left flex flex-col justify-center min-h-[220px]">
+                  <div className="absolute inset-0 bg-gradient-to-r from-bg-primary/95 via-bg-primary/80 to-transparent z-10" />
+                  <div className="absolute right-0 top-0 w-1/2 h-full opacity-30 z-0">
                     <img 
-                      src={activeRaffle.prizeImage || 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=800&auto=format&fit=crop&q=60'} 
-                      alt={activeRaffle.title} 
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      src="https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&auto=format&fit=crop&q=60" 
+                      alt="Gaming Banner" 
+                      className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-bg-primary/95 via-transparent to-transparent flex items-end p-4">
-                      <span className="text-xs font-bold uppercase tracking-wider text-accent-gold font-rajdhani bg-bg-secondary/90 px-3 py-1 rounded border border-bg-tertiary">
-                        Premio Principal
-                      </span>
-                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Countdown / Live alert */}
-            <div className="text-center">
-              {activeRaffle.status === 'active' ? (
-                <div className="flex flex-col items-center">
-                  <h4 className="text-xs uppercase font-bold tracking-widest text-text-muted mb-2 font-rajdhani">TIEMPO RESTANTE PARA EL SORTEO</h4>
-                  <CountdownClock targetDate={activeRaffle.drawDate} />
-                </div>
-              ) : activeRaffle.status === 'drawing' ? (
-                <div className="glass-panel p-6 rounded-2xl max-w-md mx-auto border border-red-500/30 text-center animate-pulse glow-gold">
-                  <h3 className="text-lg font-bold text-red-500 flex items-center justify-center gap-2 font-heading">
-                    <Play size={18} className="fill-current" /> ¡SORTEO EN VIVO EN PROCESO!
-                  </h3>
-                  <p className="text-xs text-text-secondary mt-1 mb-3">El creador está girando la ruleta. ¡Únete para ver en vivo el resultado!</p>
-                  <button 
-                    onClick={() => setActiveTab('live')}
-                    className="px-5 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 font-bold text-xs uppercase tracking-wider text-white font-heading"
-                  >
-                    Entrar al Sorteo
-                  </button>
-                </div>
-              ) : null}
-            </div>
-
-            {/* Client Main Form Section */}
-            {activeRaffle.status === 'active' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mt-4 w-full">
-                
-                {/* Left Side: Ticket selector and Progressive Bar */}
-                <div className="flex flex-col gap-6 w-full">
-                  <TicketSelector 
-                    ticketPrice={activeRaffle.ticketPrice}
-                    currency={activeRaffle.currency}
-                    selectedCount={ticketCount}
-                    onChange={(count) => setTicketCount(count)}
-                    soldTicketsCount={tickets.filter(t => t.raffleId === activeRaffle.id && t.paymentStatus === 'verified').length}
-                    totalTicketsCount={activeRaffle.totalTickets}
-                  />
-
-                  {/* Payment Methods Details */}
-                  <div className="glass-panel p-6 rounded-2xl border border-bg-tertiary text-left flex flex-col gap-4">
-                    <h3 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2 font-heading">
-                      <CreditCard size={18} style={{ color: 'var(--accent-gold)' }} /> MODOS DE PAGO Y DETALLES
-                    </h3>
-                    <div className="flex flex-col gap-2">
-                      <div className="p-3.5 rounded-xl bg-bg-secondary border border-bg-tertiary text-sm">
-                        <span className="text-xs text-text-muted block">Banco/Canal</span>
-                        <strong className="text-white text-base block">{activeRaffle.paymentInfo.bankName}</strong>
-                      </div>
-                      <div className="p-3.5 rounded-xl bg-bg-secondary border border-bg-tertiary text-sm">
-                        <span className="text-xs text-text-muted block">Titular de la cuenta</span>
-                        <strong className="text-white text-base block">{activeRaffle.paymentInfo.accountHolder}</strong>
-                      </div>
-                      <div className="p-3.5 rounded-xl bg-bg-secondary border border-bg-tertiary text-sm">
-                        <span className="text-xs text-text-muted block">Número de cuenta / Cédula / RNC</span>
-                        <strong className="text-white text-lg font-bold block text-gold-gradient font-orbitron">{activeRaffle.paymentInfo.bankId}</strong>
-                      </div>
-                    </div>
-                    <p className="text-xs text-text-muted italic leading-relaxed border-t border-bg-tertiary pt-3">
-                      💡 {activeRaffle.paymentInfo.details}
+                  <div className="relative z-20 max-w-xl flex flex-col items-start">
+                    <span className="text-xs uppercase font-extrabold tracking-widest text-accent-gold px-3 py-1 rounded-full bg-accent-gold-muted border border-accent-gold-border mb-4 font-rajdhani">
+                      Plataforma Oficial
+                    </span>
+                    <h2 className="text-3xl md:text-5xl font-orbitron font-extrabold text-white mb-2 uppercase tracking-wide">
+                      Sorteos Disponibles
+                    </h2>
+                    <p className="text-sm text-text-secondary leading-relaxed font-sans">
+                      Explora y elige uno de nuestros sorteos activos de {currentTenant.companyName}. ¡Adquiere tus boletos digitalmente de manera rápida y segura!
                     </p>
                   </div>
                 </div>
 
-                {/* Right Side: Data form & receipt upload */}
-                <div className="glass-panel p-8 rounded-2xl border border-bg-tertiary text-left flex flex-col gap-6 w-full">
-                  <h3 className="text-lg font-bold uppercase tracking-wide text-white border-b border-bg-tertiary pb-3 font-heading">
-                    COMPLETA TU ADQUISICIÓN
-                  </h3>
+                {/* Grid of Raffles */}
+                {tenantRaffles.length === 0 ? (
+                  <div className="glass-panel p-12 rounded-3xl border border-bg-tertiary text-center flex flex-col items-center gap-4">
+                    <div className="w-16 h-16 rounded-full bg-bg-secondary flex items-center justify-center border border-bg-tertiary text-text-muted">
+                      <Trophy size={28} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold font-orbitron text-white uppercase">No hay sorteos activos</h3>
+                      <p className="text-xs text-text-muted mt-1 max-w-xs mx-auto">Vuelve más tarde para ver nuevos sorteos disponibles en esta marca.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full">
+                    {tenantRaffles.map((raffle) => {
+                      const soldCount = tickets.filter(t => t.raffleId === raffle.id && t.paymentStatus === 'verified').length;
+                      const progressPercent = Math.min(100, Math.round((soldCount / raffle.totalTickets) * 100));
 
-                  {purchaseSuccess ? (
-                    <div className="flex flex-col items-center justify-center p-6 text-center gap-4 bg-emerald-950/20 border border-emerald-500/30 rounded-2xl">
-                      <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                        <Check size={32} />
-                      </div>
-                      <div>
-                        <h4 className="text-xl font-bold text-white font-heading">¡Boletos Reservados!</h4>
-                        <p className="text-xs text-text-secondary mt-1">Hemos registrado tu reservación y comprobante. Una vez el administrador valide el depósito bancario, te enviaremos una confirmación de pago por correo.</p>
-                      </div>
+                      return (
+                        <div 
+                          key={raffle.id}
+                          className="glass-panel rounded-2xl overflow-hidden border border-bg-tertiary flex flex-col text-left group hover:border-accent-gold-border transition-all duration-300 transform hover:-translate-y-1 shadow-lg"
+                        >
+                          {/* Image wrapper */}
+                          <div className="relative aspect-[16/10] overflow-hidden bg-bg-primary border-b border-bg-tertiary">
+                            <img 
+                              src={raffle.prizeImage || 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=800&auto=format&fit=crop&q=60'} 
+                              alt={raffle.title} 
+                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            />
+                            <div className="absolute top-3 left-3 z-10">
+                              {raffle.status === 'active' ? (
+                                <span className="text-[10px] uppercase font-black tracking-widest text-emerald-400 px-2.5 py-1 rounded bg-emerald-950/90 border border-emerald-500/40 font-rajdhani flex items-center gap-1 shadow-md">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                  Activo
+                                </span>
+                              ) : raffle.status === 'drawing' ? (
+                                <span className="text-[10px] uppercase font-black tracking-widest text-red-400 px-2.5 py-1 rounded bg-red-950/90 border border-red-500/40 font-rajdhani flex items-center gap-1 animate-pulse shadow-md">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span>
+                                  Sorteando
+                                </span>
+                              ) : (
+                                <span className="text-[10px] uppercase font-black tracking-widest text-text-muted px-2.5 py-1 rounded bg-bg-secondary/90 border border-bg-tertiary font-rajdhani shadow-md">
+                                  Finalizado
+                                </span>
+                              )}
+                            </div>
+                            <div className="absolute bottom-3 right-3 z-10 bg-bg-primary/95 px-3 py-1 rounded border border-bg-tertiary text-xs font-black text-accent-gold font-orbitron shadow-md">
+                              {raffle.currency}{raffle.ticketPrice.toLocaleString()} / Boleto
+                            </div>
+                          </div>
 
-                      {/* Display reserved ticket numbers */}
-                      <div className="w-full flex flex-wrap justify-center gap-2 mt-2">
-                        {generatedNumbers.map((num, i) => (
-                          <span key={i} className="text-base font-extrabold px-3 py-1.5 rounded-lg bg-bg-secondary border border-bg-tertiary text-gold-gradient font-orbitron">
-                            #{num}
+                          {/* Info details */}
+                          <div className="p-6 flex flex-col flex-grow gap-4 justify-between">
+                            <div>
+                              <h3 className="text-lg font-orbitron font-extrabold text-white mb-2 line-clamp-1 group-hover:text-accent-gold transition-colors duration-200">
+                                {raffle.title}
+                              </h3>
+                              <p className="text-xs text-text-secondary line-clamp-2 leading-relaxed mb-4">
+                                {raffle.description}
+                              </p>
+
+                              {/* Prizes preview */}
+                              <div className="flex flex-col gap-1.5 mb-4 bg-bg-secondary/50 p-3 rounded-xl border border-border-color-light">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted font-rajdhani">Premios principales:</span>
+                                <div className="flex flex-col gap-1">
+                                  {raffle.prizes.slice(0, 2).map((p, idx) => (
+                                    <span key={p.id} className="text-xs text-white truncate flex items-center gap-1.5 font-sans">
+                                      <Trophy size={12} className="text-accent-gold min-w-[12px]" />
+                                      <strong className="text-[11px] text-text-muted">{idx === 0 ? '🏆 1er' : `${idx + 1}º`}:</strong> {p.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col gap-4 border-t border-bg-tertiary pt-4">
+                              {/* Progress bar */}
+                              <div className="flex flex-col gap-1.5">
+                                <div className="flex justify-between items-center text-[10px] text-text-muted font-rajdhani">
+                                  <span>PROGRESO DE VENTAS</span>
+                                  <span className="font-bold text-white">{soldCount} / {raffle.totalTickets} ({progressPercent}%)</span>
+                                </div>
+                                <div className="w-full h-2 bg-bg-secondary rounded-full overflow-hidden border border-bg-tertiary p-0.5">
+                                  <div 
+                                    className="h-full rounded-full transition-all duration-500" 
+                                    style={{ 
+                                      width: `${progressPercent}%`,
+                                      background: 'var(--accent-gold)'
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Call to action */}
+                              <button
+                                onClick={() => {
+                                  setSelectedRaffleId(raffle.id);
+                                  setClientViewMode('detail');
+                                }}
+                                className="w-full py-2.5 rounded-xl bg-bg-secondary border border-bg-tertiary hover:bg-accent-gold hover:text-bg-primary hover:border-accent-gold text-xs font-bold uppercase tracking-wider text-white transition-all duration-300 font-heading text-center"
+                              >
+                                {raffle.status === 'finished' ? 'Ver Resultados' : 'Participar ahora'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-6">
+                {/* Back button */}
+                <button
+                  onClick={() => setClientViewMode('catalog')}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-bg-secondary hover:bg-bg-tertiary border border-border-color-light text-xs font-bold text-text-secondary hover:text-white transition-all self-start font-heading"
+                >
+                  <ChevronLeft size={14} /> Volver a Sorteos
+                </button>
+
+                {/* Raffle Details Header */}
+                <div className="glass-panel p-8 rounded-3xl relative overflow-hidden border border-bg-tertiary">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+                    {/* Left Column: Raffle Text Info */}
+                    <div className="md:col-span-7 text-left flex flex-col items-start justify-center">
+                      <span className="text-xs uppercase font-extrabold tracking-widest text-accent-gold px-3 py-1 rounded-full bg-accent-gold-muted border border-accent-gold-border mb-4 font-rajdhani">
+                        Sorteo Oficial
+                      </span>
+                      <h2 className="text-3xl md:text-4xl font-orbitron font-extrabold text-white mb-2">{activeRaffle.title}</h2>
+                      <p className="text-sm text-text-secondary leading-relaxed mb-6">{activeRaffle.description}</p>
+                      
+                      {/* Prizes List */}
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2 font-rajdhani">Premios en Juego</h4>
+                      <div className="flex flex-wrap items-center gap-3 w-full">
+                        {activeRaffle.prizes.map((p, idx) => (
+                          <span key={p.id} className="text-xs font-semibold px-4 py-2 rounded-lg bg-bg-secondary border border-border-color-light flex items-center gap-1.5 font-sans">
+                            <Trophy size={13} style={{ color: 'var(--accent-gold)' }} />
+                            {idx === 0 ? '🏆 1er Premio: ' : `${idx + 1}º Premio: `} {p.name}
                           </span>
                         ))}
                       </div>
 
-                      <button
-                        onClick={() => setPurchaseSuccess(false)}
-                        className="mt-4 px-4 py-2.5 rounded-xl border border-bg-tertiary text-xs font-semibold text-white hover:bg-bg-secondary"
+                      {/* Show Winner block if raffle is finished */}
+                      {activeRaffle.status === 'finished' && (
+                        <div className="mt-6 p-6 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 max-w-md w-full glow-gold">
+                          <h4 className="text-xs uppercase font-extrabold text-emerald-400 tracking-wider font-rajdhani">🎉 Sorteo Finalizado (Boleto Ganador)</h4>
+                          <h3 className="text-4xl font-black text-white mt-2 font-orbitron">#{tickets.find(t => t.id === activeRaffle.winnerTicketId)?.ticketNumber}</h3>
+                          <p className="text-sm font-semibold text-white mt-1">{activeRaffle.winnerName}</p>
+                          <p className="text-[10px] text-emerald-500 mt-2 font-rajdhani">Este sorteo se cerrará permanentemente en 15 días.</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right Column: Beautiful Prize Image */}
+                    <div className="md:col-span-5 flex flex-col items-center justify-center">
+                      <div className="relative w-full max-w-[340px] aspect-[4/3] rounded-2xl overflow-hidden border border-bg-tertiary shadow-xl glow-gold group">
+                        <img 
+                          src={activeRaffle.prizeImage || 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=800&auto=format&fit=crop&q=60'} 
+                          alt={activeRaffle.title} 
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-bg-primary/95 via-transparent to-transparent flex items-end p-4">
+                          <span className="text-xs font-bold uppercase tracking-wider text-accent-gold font-rajdhani bg-bg-secondary/90 px-3 py-1 rounded border border-bg-tertiary">
+                            Premio Principal
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Countdown / Live alert */}
+                <div className="text-center">
+                  {activeRaffle.status === 'active' ? (
+                    <div className="flex flex-col items-center">
+                      <h4 className="text-xs uppercase font-bold tracking-widest text-text-muted mb-2 font-rajdhani">TIEMPO RESTANTE PARA EL SORTEO</h4>
+                      <CountdownClock targetDate={activeRaffle.drawDate} />
+                    </div>
+                  ) : activeRaffle.status === 'drawing' ? (
+                    <div className="glass-panel p-6 rounded-2xl max-w-md mx-auto border border-red-500/30 text-center animate-pulse glow-gold">
+                      <h3 className="text-lg font-bold text-red-500 flex items-center justify-center gap-2 font-heading">
+                        <Play size={18} className="fill-current" /> ¡SORTEO EN VIVO EN PROCESO!
+                      </h3>
+                      <p className="text-xs text-text-secondary mt-1 mb-3">El creador está girando la ruleta. ¡Únete para ver en vivo el resultado!</p>
+                      <button 
+                        onClick={() => setActiveTab('live')}
+                        className="px-5 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 font-bold text-xs uppercase tracking-wider text-white font-heading"
                       >
-                        Comprar más boletos
+                        Entrar al Sorteo
                       </button>
                     </div>
-                  ) : (
-                    <div className="flex flex-col gap-4">
-                      {/* Name input */}
-                      <div className="flex flex-col gap-2">
-                        <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary flex items-center gap-1 font-rajdhani">
-                          <User size={13} /> Nombres y Apellidos *
-                        </label>
-                        <input
-                          type="text"
-                          value={buyerName}
-                          onChange={(e) => setBuyerName(e.target.value)}
-                          placeholder="Tu nombre completo"
-                          className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
-                        />
-                      </div>
-
-                      {/* Phone input */}
-                      <div className="flex flex-col gap-2">
-                        <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary flex items-center gap-1 font-rajdhani">
-                          <Smartphone size={13} /> Teléfono (WhatsApp) *
-                        </label>
-                        <input
-                          type="text"
-                          value={buyerPhone}
-                          onChange={(e) => setBuyerPhone(e.target.value)}
-                          placeholder="WhatsApp, ej. 8095551234"
-                          className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
-                        />
-                      </div>
-
-                      {/* Email input */}
-                      <div className="flex flex-col gap-2">
-                        <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary flex items-center gap-1 font-rajdhani">
-                          <Mail size={13} /> Correo Electrónico *
-                        </label>
-                        <input
-                          type="email"
-                          value={buyerEmail}
-                          onChange={(e) => setBuyerEmail(e.target.value)}
-                          placeholder="tu.correo@ejemplo.com"
-                          className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
-                        />
-                      </div>
-
-                      {/* Deposit Uploader */}
-                      <DepositUploader 
-                        onFileSelect={(file) => setReceiptFile(file)}
-                        onSubmit={() => {
-                          if (!buyerName || !buyerEmail || !buyerPhone) {
-                            alert('Por favor completa todos tus datos personales.');
-                            return;
-                          }
-                          setShowConfirmModal(true);
-                        }}
-                      />
-                    </div>
-                  )}
+                  ) : null}
                 </div>
+
+                {/* Client Main Form Section */}
+                {activeRaffle.status === 'active' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mt-4 w-full">
+                    
+                    {/* Left Side: Ticket selector and Progressive Bar */}
+                    <div className="flex flex-col gap-6 w-full">
+                      <TicketSelector 
+                        ticketPrice={activeRaffle.ticketPrice}
+                        currency={activeRaffle.currency}
+                        selectedCount={ticketCount}
+                        onChange={(count) => setTicketCount(count)}
+                        soldTicketsCount={tickets.filter(t => t.raffleId === activeRaffle.id && t.paymentStatus === 'verified').length}
+                        totalTicketsCount={activeRaffle.totalTickets}
+                      />
+
+                      {/* Payment Methods Details */}
+                      <div className="glass-panel p-6 rounded-2xl border border-bg-tertiary text-left flex flex-col gap-4">
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2 font-heading">
+                          <CreditCard size={18} style={{ color: 'var(--accent-gold)' }} /> MODOS DE PAGO Y DETALLES
+                        </h3>
+                        <div className="flex flex-col gap-2">
+                          <div className="p-3.5 rounded-xl bg-bg-secondary border border-bg-tertiary text-sm">
+                            <span className="text-xs text-text-muted block">Banco/Canal</span>
+                            <strong className="text-white text-base block">{activeRaffle.paymentInfo.bankName}</strong>
+                          </div>
+                          <div className="p-3.5 rounded-xl bg-bg-secondary border border-bg-tertiary text-sm">
+                            <span className="text-xs text-text-muted block">Titular de la cuenta</span>
+                            <strong className="text-white text-base block">{activeRaffle.paymentInfo.accountHolder}</strong>
+                          </div>
+                          <div className="p-3.5 rounded-xl bg-bg-secondary border border-bg-tertiary text-sm">
+                            <span className="text-xs text-text-muted block">Número de cuenta / Cédula / RNC</span>
+                            <strong className="text-white text-lg font-bold block text-gold-gradient font-orbitron">{activeRaffle.paymentInfo.bankId}</strong>
+                          </div>
+                        </div>
+                        <p className="text-xs text-text-muted italic leading-relaxed border-t border-bg-tertiary pt-3">
+                          💡 {activeRaffle.paymentInfo.details}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Right Side: Data form & receipt upload */}
+                    <div className="glass-panel p-8 rounded-2xl border border-bg-tertiary text-left flex flex-col gap-6 w-full">
+                      <h3 className="text-lg font-bold uppercase tracking-wide text-white border-b border-bg-tertiary pb-3 font-heading">
+                        COMPLETA TU ADQUISICIÓN
+                      </h3>
+
+                      {purchaseSuccess ? (
+                        <div className="flex flex-col items-center justify-center p-6 text-center gap-4 bg-emerald-950/20 border border-emerald-500/30 rounded-2xl">
+                          <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                            <Check size={32} />
+                          </div>
+                          <div>
+                            <h4 className="text-xl font-bold text-white font-heading">¡Boletos Reservados!</h4>
+                            <p className="text-xs text-text-secondary mt-1">Hemos registrado tu reservación y comprobante. Una vez el administrador valide el depósito bancario, te enviaremos una confirmación de pago por correo.</p>
+                          </div>
+
+                          {/* Display reserved ticket numbers */}
+                          <div className="w-full flex flex-wrap justify-center gap-2 mt-2">
+                            {generatedNumbers.map((num, i) => (
+                              <span key={i} className="text-base font-extrabold px-3 py-1.5 rounded-lg bg-bg-secondary border border-bg-tertiary text-gold-gradient font-orbitron">
+                                #{num}
+                              </span>
+                            ))}
+                          </div>
+
+                          <button
+                            onClick={() => setPurchaseSuccess(false)}
+                            className="mt-4 px-4 py-2.5 rounded-xl border border-bg-tertiary text-xs font-semibold text-white hover:bg-bg-secondary"
+                          >
+                            Comprar más boletos
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-4">
+                          {/* Name input */}
+                          <div className="flex flex-col gap-2">
+                            <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary flex items-center gap-1 font-rajdhani">
+                              <User size={13} /> Nombres y Apellidos *
+                            </label>
+                            <input
+                              type="text"
+                              value={buyerName}
+                              onChange={(e) => setBuyerName(e.target.value)}
+                              placeholder="Tu nombre completo"
+                              className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                            />
+                          </div>
+
+                          {/* Phone input */}
+                          <div className="flex flex-col gap-2">
+                            <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary flex items-center gap-1 font-rajdhani">
+                              <Smartphone size={13} /> Teléfono (WhatsApp) *
+                            </label>
+                            <input
+                              type="text"
+                              value={buyerPhone}
+                              onChange={(e) => setBuyerPhone(e.target.value)}
+                              placeholder="WhatsApp, ej. 8095551234"
+                              className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                            />
+                          </div>
+
+                          {/* Email input */}
+                          <div className="flex flex-col gap-2">
+                            <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary flex items-center gap-1 font-rajdhani">
+                              <Mail size={13} /> Correo Electrónico *
+                            </label>
+                            <input
+                              type="email"
+                              value={buyerEmail}
+                              onChange={(e) => setBuyerEmail(e.target.value)}
+                              placeholder="tu.correo@ejemplo.com"
+                              className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                            />
+                          </div>
+
+                          {/* Deposit Uploader */}
+                          <DepositUploader 
+                            onFileSelect={(file) => setReceiptFile(file)}
+                            onSubmit={() => {
+                              if (!buyerName || !buyerEmail || !buyerPhone) {
+                                alert('Por favor completa todos tus datos personales.');
+                                return;
+                              }
+                              setShowConfirmModal(true);
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

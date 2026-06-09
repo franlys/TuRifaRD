@@ -1,73 +1,61 @@
-# React + TypeScript + Vite
+# Rifa2RD - Sistema de Sorteos Multi-Tenant Premium 🏆
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Este proyecto es una plataforma de sorteos premium diseñada especialmente para marcas de eSports y sorteos exóticos, con soporte multi-inquilino (multi-tenant) dinámico que ajusta colores, logos y temática según la marca.
 
-Currently, two official plugins are available:
+## 🚀 Despliegue Rápido y Configuración
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+El proyecto está preparado para conectarse a **Supabase** y desplegarse en **Vercel** de manera inmediata. Solo necesitas configurar las variables de entorno correspondientes.
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 1. Configuración de Base de Datos (Supabase)
 
-## Expanding the ESLint configuration
+1. Crea un proyecto en [Supabase](https://supabase.com).
+2. Dirígete a la sección **SQL Editor** en el panel lateral de tu proyecto de Supabase.
+3. Copia el contenido del archivo [`supabase_schema.sql`](file:///c:/Users/elmae/rifas/supabase_schema.sql) (ubicado en la raíz de este proyecto).
+4. Pega el script en el editor y presiona **Run** para crear las tablas (`tenants`, `creators`, `raffles`, `prizes`, `tickets`), configurar la seguridad de filas (RLS) y poblar los datos iniciales de prueba para `Banshee` y `Sorteos del Cibao`.
+5. Obtén tus credenciales desde la pestaña **Project Settings > API**:
+   - `Project URL` (ej. `https://xxxxxx.supabase.co`)
+   - `anon public API key`
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+---
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### 2. Configuración Local
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+1. Instala las dependencias del proyecto:
+   ```bash
+   npm install
+   ```
+2. Crea un archivo `.env` en la raíz del proyecto basándote en `.env.example`:
+   ```env
+   VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
+   VITE_SUPABASE_ANON_KEY=tu-anon-key-publica
+   ```
+3. Levanta el servidor de desarrollo:
+   ```bash
+   npm run dev
+   ```
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+---
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### 3. Despliegue en Vercel
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+1. Sube tu repositorio a GitHub.
+2. Crea un nuevo proyecto en **Vercel** apuntando a tu repositorio de GitHub.
+3. En la sección **Environment Variables** durante la creación del proyecto (o en settings), agrega las siguientes variables:
+   - `VITE_SUPABASE_URL` = (Tu URL de Supabase)
+   - `VITE_SUPABASE_ANON_KEY` = (Tu API Key anon de Supabase)
+4. Vercel detectará la configuración de Vite automáticamente. Haz clic en **Deploy**.
+5. Las rutas secundarias y subdominios están controlados en Vercel gracias al archivo [`vercel.json`](file:///c:/Users/elmae/rifas/vercel.json) configurado en la raíz.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+---
+
+## 🎨 Características Clave Implementadas
+
+- **Home Page / Catálogo Dinámico**: Landing page del cliente tipo grid que muestra todos los sorteos activos de la marca actual, con barra de progreso de ventas de boletos en tiempo real, imágenes en alta calidad del premio, estado del sorteo y botón para participar.
+- **Cambio Dinámico de Marca (Tenants)**: El diseño visual (neon cyan, gold, fondos oscuros, tipografía gaming, etc.) se adapta automáticamente según el parámetro de URL:
+  - `http://localhost:5173/?brand=banshee` (Estética dorada / Banshee Exótico)
+  - `http://localhost:5173/?brand=cibao` (Estética cyan / Sorteos del Cibao)
+- **Selector de Boletos Premium**: Compra múltiple de boletos de un solo clic con sistema de validación rápida.
+- **Verificador de Boletos**: Formulario en el pie de página para que el usuario verifique el estado de su boleto ingresando su correo o teléfono.
+- **Acceso Administrativo Completo**: Permite crear nuevos creadores de sorteos, aprobar/rechazar comprobantes de depósito de los participantes y sortear en vivo mediante ruleta interactiva.
