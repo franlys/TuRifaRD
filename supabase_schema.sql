@@ -30,8 +30,9 @@ CREATE TABLE IF NOT EXISTS creators (
     tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
-    status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'suspended')),
+    status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'pending_verification')),
     created_raffles_count INTEGER DEFAULT 0,
+    activation_receipt_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

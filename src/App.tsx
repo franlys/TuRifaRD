@@ -35,8 +35,9 @@ interface CreatorUser {
   tenantId: string;
   name: string;
   email: string;
-  status: 'active' | 'suspended';
+  status: 'active' | 'suspended' | 'pending_verification';
   createdRafflesCount: number;
+  activationReceiptUrl?: string;
 }
 
 interface Prize {
@@ -238,6 +239,15 @@ function App() {
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
+  // Creator Registration & Recovery States
+  const [loginMode, setLoginMode] = useState<'login' | 'register' | 'forgot' | 'payment'>('login');
+  const [regName, setRegName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regBrandName, setRegBrandName] = useState('');
+  const [regBrandSlug, setRegBrandSlug] = useState('');
+  const [regPaymentPendingCreator, setRegPaymentPendingCreator] = useState<any | null>(null);
+
   // Live Draw View States
   const [triggerSpin, setTriggerSpin] = useState(false);
   const [liveDrawingInProgress, setLiveDrawingInProgress] = useState(false);
@@ -335,11 +345,16 @@ function App() {
             // Verificar si el usuario registrado existe en la tabla de creadores
             const { data: creatorData } = await supabase
               .from('creators')
-              .select('id')
+              .select('id, status')
               .eq('email', email)
               .single();
 
             if (creatorData) {
+              if (creatorData.status !== 'active') {
+                alert('Tu cuenta de creador está pendiente de activación o suspendida. Por favor, contacta al administrador.');
+                await supabase.auth.signOut();
+                return;
+              }
               setAdminRole('creator');
               setCurrentCreatorId(creatorData.id);
             } else {
@@ -378,6 +393,10 @@ function App() {
       // Check if matches creators
       const creator = creators.find(c => c.email.toLowerCase() === email);
       if (creator && password === envCreatorPassword) {
+        if (creator.status !== 'active') {
+          alert('Tu cuenta de creador está pendiente de activación o suspendida. Por favor, contacta al administrador.');
+          return;
+        }
         setAdminRole('creator');
         setCurrentCreatorId(creator.id);
         setIsAdminLoggedIn(true);
@@ -388,6 +407,167 @@ function App() {
         alert('Credenciales incorrectas de Acceso Administrativo.');
       }
     }
+  };
+
+  // Handle Creator Registration Submit
+  const handleCreatorRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = regName.trim();
+    const email = regEmail.trim().toLowerCase();
+    const password = regPassword.trim();
+    const brandName = regBrandName.trim();
+    const brandSlug = regBrandSlug.trim().toLowerCase() || regBrandName.trim().toLowerCase().replace(/\s+/g, '-');
+
+    if (!name || !email || !password || !brandName) {
+      alert('Por favor completa todos los campos.');
+      return;
+    }
+
+    // Guardar temporalmente los datos para pasar a la pantalla de pago de activación
+    setRegPaymentPendingCreator({
+      id: `c-reg-${Date.now()}`,
+      name,
+      email,
+      password,
+      brandName,
+      brandSlug
+    });
+
+    setLoginMode('payment');
+  };
+
+  // Handle Creator Payment Proof Submit
+  const handleCreatorPaymentSubmit = async (receiptUrlStr: string) => {
+    if (!regPaymentPendingCreator) return;
+    const isSupabaseActive = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+    const newCreator: CreatorUser = {
+      id: regPaymentPendingCreator.id,
+      tenantId: regPaymentPendingCreator.brandSlug,
+      name: regPaymentPendingCreator.name,
+      email: regPaymentPendingCreator.email,
+      status: 'pending_verification',
+      createdRafflesCount: 0,
+      activationReceiptUrl: receiptUrlStr
+    };
+
+    if (isSupabaseActive) {
+      try {
+        // 1. Crear el usuario en Supabase Auth
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: regPaymentPendingCreator.email,
+          password: regPaymentPendingCreator.password,
+          options: {
+            data: {
+              name: regPaymentPendingCreator.name,
+              role: 'creator'
+            }
+          }
+        });
+
+        if (authError) {
+          alert(`Error de registro en Supabase: ${authError.message}`);
+          return;
+        }
+
+        // 2. Crear Tenant si no existe
+        const { error: tenantError } = await supabase
+          .from('tenants')
+          .insert({
+            id: `00000000-0000-0000-0000-${Date.now().toString().slice(-12)}`,
+            slug: regPaymentPendingCreator.brandSlug,
+            company_name: regPaymentPendingCreator.brandName
+          });
+
+        if (tenantError) console.warn("Tenant creation error (might already exist):", tenantError.message);
+
+        // 3. Crear Creator en la tabla creadores
+        const { error: creatorError } = await supabase
+          .from('creators')
+          .insert({
+            id: authData.user?.id || newCreator.id,
+            tenant_id: null,
+            name: regPaymentPendingCreator.name,
+            email: regPaymentPendingCreator.email,
+            status: 'pending_verification',
+            activation_receipt_url: receiptUrlStr
+          });
+
+        if (creatorError) console.error("Error insertando creador en BD:", creatorError.message);
+      } catch (err) {
+        console.error("Error conectando a Supabase durante el registro:", err);
+      }
+    }
+
+    // Guardar en memoria local
+    const updatedCreators = [...creators, newCreator];
+    setCreators(updatedCreators);
+    localStorage.setItem('rifas_creators', JSON.stringify(updatedCreators));
+
+    alert('¡Registro y pago recibidos con éxito! El administrador de Tu Rifa RD revisará tu comprobante y activará tu cuenta en breve.');
+    
+    // Resetear formulario de registro
+    setRegName('');
+    setRegEmail('');
+    setRegPassword('');
+    setRegBrandName('');
+    setRegBrandSlug('');
+    setRegPaymentPendingCreator(null);
+    setLoginMode('login');
+  };
+
+  // Handle Password Recovery request
+  const handlePasswordRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = loginEmail.trim().toLowerCase();
+    if (!email) {
+      alert('Por favor ingresa tu correo electrónico.');
+      return;
+    }
+
+    const isSupabaseActive = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (isSupabaseActive) {
+      try {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + '?action=reset-password'
+        });
+        if (error) {
+          alert(`Error enviando correo: ${error.message}`);
+          return;
+        }
+      } catch (err) {
+        console.error("Error en restablecimiento de contraseña Supabase:", err);
+      }
+    }
+
+    alert(`Se ha enviado un enlace para restablecer tu contraseña al correo: ${email}`);
+    setLoginMode('login');
+  };
+
+  // Super Admin: Aprobar y Activar Creador
+  const handleActivateCreator = async (creatorId: string) => {
+    const isSupabaseActive = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+    if (isSupabaseActive) {
+      try {
+        const { error } = await supabase
+          .from('creators')
+          .update({ status: 'active' })
+          .eq('id', creatorId);
+
+        if (error) {
+          alert(`Error activando en Supabase: ${error.message}`);
+          return;
+        }
+      } catch (err) {
+        console.error("Error activando creador en Supabase:", err);
+      }
+    }
+
+    const updated = creators.map(c => c.id === creatorId ? { ...c, status: 'active' as const } : c);
+    setCreators(updated);
+    localStorage.setItem('rifas_creators', JSON.stringify(updated));
+    alert('Cuenta de creador activada exitosamente.');
   };
 
   // Helper: Search tickets by email/phone
@@ -1029,52 +1209,264 @@ function App() {
         {activeTab === 'login' && !isAdminLoggedIn && (
           <div className="flex flex-col gap-8 animate-fadeIn">
             <div className="glass-panel p-8 rounded-3xl border border-bg-tertiary max-w-md mx-auto flex flex-col gap-6 shadow-2xl mt-6 w-full">
-              <div className="flex flex-col items-center gap-2 text-center">
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center glow-gold" style={{ background: 'linear-gradient(135deg, #f3cf65 0%, #d4af37 100%)' }}>
-                  <Lock size={22} className="text-bg-primary" />
-                </div>
-                <h2 className="text-2xl font-orbitron font-extrabold text-white uppercase tracking-tight mt-2">Acceso Administrativo</h2>
-                <p className="text-xs text-text-secondary font-rajdhani">Ingresa tus credenciales autorizadas.</p>
-              </div>
+              
+              {loginMode === 'login' && (
+                <>
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center glow-gold" style={{ background: 'linear-gradient(135deg, #f3cf65 0%, #d4af37 100%)' }}>
+                      <Lock size={22} className="text-bg-primary" />
+                    </div>
+                    <h2 className="text-2xl font-orbitron font-extrabold text-white uppercase tracking-tight mt-2">Acceso Administrativo</h2>
+                    <p className="text-xs text-text-secondary font-rajdhani">Ingresa tus credenciales autorizadas.</p>
+                  </div>
 
-              {/* SECURE: The golden hints box has been completely removed to prevent public exposure of administrative credentials */}
+                  <form onSubmit={handleAdminLogin} className="flex flex-col gap-4 text-left">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">Correo Electrónico</label>
+                      <input
+                        type="email"
+                        required
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        placeholder="admin@rifas.com"
+                        className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                      />
+                    </div>
 
-              <form onSubmit={handleAdminLogin} className="flex flex-col gap-4 text-left">
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">Correo Electrónico</label>
-                  <input
-                    type="email"
-                    required
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="admin@rifas.com"
-                    className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
-                  />
-                </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">Contraseña</label>
+                      <input
+                        type="password"
+                        required
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                      />
+                    </div>
 
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">Contraseña</label>
-                  <input
-                    type="password"
-                    required
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
-                  />
-                </div>
+                    <button
+                      type="submit"
+                      className="w-full py-3.5 rounded-xl font-bold tracking-wider text-xs uppercase hover:scale-[1.02] transition-all cursor-pointer glow-gold font-heading mt-2"
+                      style={{
+                        background: 'linear-gradient(135deg, #f3cf65 0%, #d4af37 100%)',
+                        color: 'var(--bg-primary)'
+                      }}
+                    >
+                      Iniciar Sesión
+                    </button>
+                  </form>
 
-                <button
-                  type="submit"
-                  className="w-full py-3.5 rounded-xl font-bold tracking-wider text-xs uppercase hover:scale-[1.02] transition-all cursor-pointer glow-gold font-heading mt-2"
-                  style={{
-                    background: 'linear-gradient(135deg, #f3cf65 0%, #d4af37 100%)',
-                    color: 'var(--bg-primary)'
-                  }}
-                >
-                  Iniciar Sesión
-                </button>
-              </form>
+                  <div className="flex flex-col gap-2 mt-2 text-center text-xs font-rajdhani border-t border-bg-tertiary pt-4">
+                    <button 
+                      onClick={() => setLoginMode('register')}
+                      className="text-accent-gold hover:underline font-bold uppercase tracking-wider text-[10px]"
+                    >
+                      🚀 Registrarme como Creador de Rifas
+                    </button>
+                    <button 
+                      onClick={() => setLoginMode('forgot')}
+                      className="text-text-muted hover:text-white"
+                    >
+                      ¿Olvidaste tu contraseña? Restablecer aquí
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {loginMode === 'register' && (
+                <>
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-bg-secondary border border-bg-tertiary text-accent-gold shadow-md">
+                      <Plus size={22} />
+                    </div>
+                    <h2 className="text-2xl font-orbitron font-extrabold text-white uppercase tracking-tight mt-2">Crear Cuenta Creador</h2>
+                    <p className="text-xs text-text-secondary font-rajdhani">Regístrate y activa tu marca en Tu Rifa RD.</p>
+                  </div>
+
+                  <form onSubmit={handleCreatorRegister} className="flex flex-col gap-4 text-left">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">Tu Nombre Completo *</label>
+                      <input
+                        type="text"
+                        required
+                        value={regName}
+                        onChange={(e) => setRegName(e.target.value)}
+                        placeholder="Nombres y Apellidos"
+                        className="w-full py-2.5 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">Correo Electrónico *</label>
+                      <input
+                        type="email"
+                        required
+                        value={regEmail}
+                        onChange={(e) => setRegEmail(e.target.value)}
+                        placeholder="tu.correo@ejemplo.com"
+                        className="w-full py-2.5 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">Contraseña Segura *</label>
+                      <input
+                        type="password"
+                        required
+                        value={regPassword}
+                        onChange={(e) => setRegPassword(e.target.value)}
+                        placeholder="Mínimo 6 caracteres"
+                        className="w-full py-2.5 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">Nombre de tu Marca / Empresa *</label>
+                      <input
+                        type="text"
+                        required
+                        value={regBrandName}
+                        onChange={(e) => setRegBrandName(e.target.value)}
+                        placeholder="ej: Banshee, Cibao Rifa"
+                        className="w-full py-2.5 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">Slug de la Marca (Opcional)</label>
+                      <input
+                        type="text"
+                        value={regBrandSlug}
+                        onChange={(e) => setRegBrandSlug(e.target.value)}
+                        placeholder="ej: banshee (para tu URL ?brand=banshee)"
+                        className="w-full py-2.5 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-3.5 rounded-xl font-bold tracking-wider text-xs uppercase hover:scale-[1.02] transition-all cursor-pointer font-heading mt-2"
+                      style={{
+                        background: 'linear-gradient(135deg, #f3cf65 0%, #d4af37 100%)',
+                        color: 'var(--bg-primary)'
+                      }}
+                    >
+                      Paso Siguiente: Pago de Activación
+                    </button>
+                  </form>
+
+                  <div className="text-center mt-2 border-t border-bg-tertiary pt-4">
+                    <button 
+                      onClick={() => setLoginMode('login')}
+                      className="text-xs text-text-muted hover:text-white"
+                    >
+                      ← Volver a iniciar sesión
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {loginMode === 'forgot' && (
+                <>
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-bg-secondary border border-bg-tertiary text-accent-gold shadow-md">
+                      <Mail size={20} />
+                    </div>
+                    <h2 className="text-2xl font-orbitron font-extrabold text-white uppercase tracking-tight mt-2">Recuperar Contraseña</h2>
+                    <p className="text-xs text-text-secondary font-rajdhani">Ingresa tu correo registrado para recibir un enlace de restablecimiento.</p>
+                  </div>
+
+                  <form onSubmit={handlePasswordRecovery} className="flex flex-col gap-4 text-left">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani">Tu Correo Electrónico</label>
+                      <input
+                        type="email"
+                        required
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        placeholder="tu.correo@ejemplo.com"
+                        className="w-full py-3 px-4 rounded-xl border bg-bg-primary text-white text-sm border-bg-tertiary focus:outline-none focus:border-accent-gold"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-3.5 rounded-xl font-bold tracking-wider text-xs uppercase hover:scale-[1.02] transition-all cursor-pointer font-heading mt-2"
+                      style={{
+                        background: 'linear-gradient(135deg, #f3cf65 0%, #d4af37 100%)',
+                        color: 'var(--bg-primary)'
+                      }}
+                    >
+                      Enviar Enlace
+                    </button>
+                  </form>
+
+                  <div className="text-center mt-2 border-t border-bg-tertiary pt-4">
+                    <button 
+                      onClick={() => setLoginMode('login')}
+                      className="text-xs text-text-muted hover:text-white"
+                    >
+                      ← Volver a iniciar sesión
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {loginMode === 'payment' && (
+                <>
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-bg-secondary border border-bg-tertiary text-accent-gold shadow-md">
+                      <CreditCard size={20} />
+                    </div>
+                    <h2 className="text-2xl font-orbitron font-extrabold text-white uppercase tracking-tight mt-2">Pago de Suscripción</h2>
+                    <p className="text-xs text-text-secondary font-rajdhani">Para activar tu cuenta de creador de rifas, realiza el pago de activación.</p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-bg-primary border border-bg-tertiary text-left flex flex-col gap-3 font-sans text-xs">
+                    <div className="flex justify-between border-b border-bg-tertiary pb-2">
+                      <span className="text-text-muted">Costo de Activación:</span>
+                      <strong className="text-white text-sm font-orbitron">RD$ 2,500.00</strong>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-text-muted font-rajdhani uppercase font-bold text-[10px]">Cuentas de Depósito Tu Rifa RD:</span>
+                      <div className="p-2 rounded bg-bg-secondary border border-bg-tertiary mt-1">
+                        <span className="text-text-muted block text-[10px]">Banco Popular</span>
+                        <strong className="text-white block text-sm font-orbitron">792-348293-1</strong>
+                        <span className="text-[10px] text-text-muted block">Titular: Randy Fernández</span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-accent-gold italic">💡 Realiza la transferencia y sube una captura legible del comprobante abajo.</p>
+                  </div>
+
+                  <div className="flex flex-col gap-2 text-left">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-text-secondary font-rajdhani flex items-center gap-1">
+                      Comprobante de Pago *
+                    </label>
+                    <DepositUploader 
+                      onFileSelect={() => {}}
+                      onSubmit={() => {
+                        // Simulación rápida de URL de comprobante
+                        const mockUrl = 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=500';
+                        handleCreatorPaymentSubmit(mockUrl);
+                      }}
+                    />
+                  </div>
+
+                  <div className="text-center mt-2 border-t border-bg-tertiary pt-4">
+                    <button 
+                      onClick={() => {
+                        setRegPaymentPendingCreator(null);
+                        setLoginMode('register');
+                      }}
+                      className="text-xs text-text-muted hover:text-white"
+                    >
+                      ← Volver al registro
+                    </button>
+                  </div>
+                </>
+              )}
+
             </div>
           </div>
         )}
@@ -1132,18 +1524,50 @@ function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {creators.filter(c => c.tenantId === tenantSlug).map(c => (
+                        {creators.map(c => (
                           <tr key={c.id} className="border-b border-bg-tertiary text-sm hover:bg-bg-tertiary transition-all">
-                            <td className="py-3 px-4 font-bold text-white">{c.name}</td>
+                            <td className="py-3 px-4 font-bold text-white">
+                              {c.name}
+                              <span className="text-[10px] text-text-muted block font-rajdhani font-medium tracking-wide">MARCA: {c.tenantId.toUpperCase()}</span>
+                            </td>
                             <td className="py-3 px-4 text-text-secondary">{c.email}</td>
                             <td className="py-3 px-4 font-semibold text-center">{c.createdRafflesCount}</td>
                             <td className="py-3 px-4">
-                              <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800">
-                                Autorizado
-                              </span>
+                              {c.status === 'active' ? (
+                                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800">
+                                  Activo (Autorizado)
+                                </span>
+                              ) : c.status === 'pending_verification' ? (
+                                <div className="flex flex-col gap-1 items-start">
+                                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-800 animate-pulse font-rajdhani">
+                                    Pendiente de Activación
+                                  </span>
+                                  {c.activationReceiptUrl && (
+                                    <button
+                                      onClick={() => setSelectedReceiptUrl(c.activationReceiptUrl || null)}
+                                      className="text-[10px] text-accent-gold hover:underline font-rajdhani mt-0.5"
+                                    >
+                                      📄 Ver Comprobante
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-xs px-2.5 py-0.5 rounded-full bg-red-950 text-red-400 border border-red-800">
+                                  Suspendido
+                                </span>
+                              )}
                             </td>
                             <td className="py-3 px-4 text-center">
-                              <span className="text-xs text-text-muted italic">Can Create Raffles</span>
+                              {c.status === 'pending_verification' ? (
+                                <button
+                                  onClick={() => handleActivateCreator(c.id)}
+                                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white transition-all font-heading"
+                                >
+                                  Activar Cuenta
+                                </button>
+                              ) : (
+                                <span className="text-xs text-text-muted italic">Acceso Habilitado</span>
+                              )}
                             </td>
                           </tr>
                         ))}
